@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,7 +11,7 @@ class AppConfig:
     PRINTER_ROTATION_DEGREES: int = 90
 
     PHOTO_COUNT: int = 4
-    COUNTDOWN_SECONDS: int = 1
+    COUNTDOWN_SECONDS: int = 3
     DELAY_BETWEEN_PHOTOS: float = 1.0
 
     # Pre-rotation dimensions: 1240×1844 rotated 90° → 1844×1240 matches the
@@ -32,10 +34,21 @@ class AppConfig:
     FOOTER_HEIGHT: int = 80   # px height of the event text footer
     PHOTO_BORDER: int = 2     # px border drawn around each photo slot
     FOOTER_FONT_SIZE: int = 30  # pt font size for event name / date text
-    STRIP_LABEL: bool = True  # draw 'L'/'R' badge on each photo corner
+    SHOW_FOOTER: bool = False   # set False to hide the footer and reclaim the space
+    STRIP_LABEL: bool = False  # draw 'L'/'R' badge on each photo corner
+    STRIP_BACKGROUND_COLOR: str = "black"  # background colour for the strip canvas
 
     CAPTURES_DIR: Path = Path("captures")
     OUTPUT_DIR: Path = Path("output")
+
+    # Set to None to disable the Pico OLED (e.g. when Pico is not connected)
+    PICO_PORT: str | None = "COM3"
+
+    # Camera backend: "canon" (default, EDSDK tethered) or "webcam" (OpenCV/UVC)
+    CAMERA_BACKEND: str = "canon"
+
+    # Full path to EDSDK.dll.  None = auto-detect from common Canon install paths.
+    EDSDK_DLL_PATH: str | None = None
 
     @property
     def STRIP_WIDTH(self) -> int:

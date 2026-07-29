@@ -13,6 +13,31 @@ except ImportError as exc:  # pragma: no cover - environment specific
     raise RuntimeError("pywin32 is required for printing. Install pywin32 first.") from exc
 
 
+def check_printer_ready(printer_name: str) -> str | None:
+    """Return None if the printer appears ready, or a short error string if not."""
+    try:
+        hprinter = win32print.OpenPrinter(printer_name)
+    except Exception:
+        return f"Printer '{printer_name}' not found"
+    try:
+        info = win32print.GetPrinter(hprinter, 2)
+        status = info.get("Status", 0)
+        _OFFLINE    = 0x00000080
+        _ERROR      = 0x00000002
+        _NOT_AVAIL  = 0x00001000
+        if status & _OFFLINE:
+            return "Printer is offline"
+        if status & _NOT_AVAIL:
+            return "Printer not available"
+        if status & _ERROR:
+            return f"Printer error (code {status:#x})"
+        return None
+    except Exception as exc:
+        return f"Printer check failed: {exc}"
+    finally:
+        win32print.ClosePrinter(hprinter)
+
+
 def _prepare_image(
     image: Image.Image,
     target_w: int,

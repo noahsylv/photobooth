@@ -17,9 +17,9 @@ def create_strip(
         raise ValueError(f"Expected {config.PHOTO_COUNT} photos, got {len(photo_paths)}.")
 
     left_strip  = _build_single_strip(photo_paths, config, "L")
-    right_strip = _build_single_strip(photo_paths, config, "R") if config.STRIP_LABEL else left_strip
+    right_strip = _build_single_strip(photo_paths, config, "R")
 
-    final_img = Image.new("RGB", (config.PRINT_WIDTH, config.PRINT_HEIGHT), "white")
+    final_img = Image.new("RGB", (config.PRINT_WIDTH, config.PRINT_HEIGHT), config.STRIP_BACKGROUND_COLOR)
     final_img.paste(left_strip, (0, 0))
     # Place the second strip flush against the right edge so the gap between
     # the two strips lands exactly on the 2-inch cut line.
@@ -32,7 +32,7 @@ def create_strip(
 
 
 def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "") -> Image.Image:
-    strip = Image.new("RGB", (config.STRIP_WIDTH, config.STRIP_HEIGHT), "white")
+    strip = Image.new("RGB", (config.STRIP_WIDTH, config.STRIP_HEIGHT), config.STRIP_BACKGROUND_COLOR)
     draw = ImageDraw.Draw(strip)
 
     # Outer edge of left strip = left side; outer edge of right strip = right side.
@@ -45,7 +45,7 @@ def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "
     margin_top    = config.MARGIN_TOP
     margin_bottom = config.MARGIN_BOTTOM
     gap           = config.PHOTO_GAP
-    footer_height = config.FOOTER_HEIGHT
+    footer_height = config.FOOTER_HEIGHT if config.SHOW_FOOTER else 0
     photo_border  = config.PHOTO_BORDER
 
     available_height = (
@@ -78,7 +78,8 @@ def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "
 
     footer_top = y - gap  # remove the trailing gap added after the last photo
     footer_bottom = config.STRIP_HEIGHT - margin_bottom
-    _draw_footer(draw, config, margin_left, footer_top, slot_width, footer_bottom - footer_top)
+    if config.SHOW_FOOTER:
+        _draw_footer(draw, config, margin_left, footer_top, slot_width, footer_bottom - footer_top)
     return strip
 
 

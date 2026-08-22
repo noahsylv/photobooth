@@ -11,7 +11,7 @@ class AppConfig:
     PRINTER_ROTATION_DEGREES: int = 90
 
     PHOTO_COUNT: int = 4
-    COUNTDOWN_SECONDS: int = 3
+    COUNTDOWN_SECONDS: int = 1 # 3
     DELAY_BETWEEN_PHOTOS: float = 1.0
 
     # Pre-rotation dimensions: 1240×1844 rotated 90° → 1844×1240 matches the
@@ -37,6 +37,8 @@ class AppConfig:
     SHOW_FOOTER: bool = False   # set False to hide the footer and reclaim the space
     STRIP_LABEL: bool = False  # draw 'L'/'R' badge on each photo corner
     STRIP_BACKGROUND_COLOR: str = "black"  # background colour for the strip canvas
+    PHOTO_FILTER: str = "final"  # photo filter applied to each image: "none", "bw", "sepia", "vintage", "vintage2", "final"
+    PHOTO_FILTER_FINAL_EXPOSURE: float = 1.40  # exposure factor used by the 'final' filter
 
     CAPTURES_DIR: Path = Path("captures")
     OUTPUT_DIR: Path = Path("output")

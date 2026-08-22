@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
+import numpy as np
 
 from config import AppConfig
+from photo_filters import apply_photo_filter
 
 
 def create_strip(
@@ -68,7 +70,13 @@ def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "
 
         inner_w = max(1, slot_width - (photo_border * 2))
         inner_h = max(1, slot_height - (photo_border * 2))
-        slot = _fit_photo_to_slot(path, inner_w, inner_h)
+        slot = _fit_photo_to_slot(
+            path,
+            inner_w,
+            inner_h,
+            config.PHOTO_FILTER,
+            config.PHOTO_FILTER_FINAL_EXPOSURE,
+        )
         strip.paste(slot, (slot_left + photo_border, slot_top + photo_border))
 
         if config.STRIP_LABEL and side:
@@ -93,10 +101,60 @@ def _draw_strip_label(draw: ImageDraw.ImageDraw, label: str, x: int, y: int) -> 
     draw.text((tx, ty), label, font=font, fill="white")
 
 
-def _fit_photo_to_slot(photo_path: str, slot_width: int, slot_height: int) -> Image.Image:
+def _apply_filter(img: Image.Image, filter_name: str, final_exposure: float = 1.0) -> Image.Image:
+    if filter_name == "final":
+        return apply_photo_filter(img, filter_name, exposure_factor=final_exposure)
+    if filter_name == "bw":
+        return ImageOps.grayscale(img).convert("RGB")
+    if filter_name == "vintage":
+        grey = ImageOps.grayscale(img)
+        grey = ImageEnhance.Contrast(grey).enhance(1.4)
+        grey = ImageEnhance.Brightness(grey).enhance(1.1)
+        arr = np.array(grey, dtype=float)
+        grain = np.random.normal(0, 8, arr.shape)
+        arr = np.clip(arr + grain, 0, 255).astype(np.uint8)
+        return Image.fromarray(arr).convert("RGB")
+    if filter_name == "vintage2":
+        arr = np.array(img, dtype=float) / 255.0  # H x W x 3, range [0, 1]
+
+        # Crush shadows: power > 1 compresses shadow detail toward black
+        arr = np.power(np.clip(arr, 0, 1), 1.25)
+        # Raise black point + bring highlights down: remap [0,1] → [0.06, 0.88]
+        arr = arr * (0.88 - 0.06) + 0.06
+
+        # Luminance for shadow/highlight masking
+        lum = (0.2126 * arr[:, :, 0] + 0.7152 * arr[:, :, 1] + 0.0722 * arr[:, :, 2])[:, :, np.newaxis]
+        shadow_w    = np.clip(1.0 - lum / 0.35, 0, 1)      # strongest in dark areas
+        highlight_w = np.clip((lum - 0.65) / 0.35, 0, 1)   # strongest in bright areas
+
+        # Shadow cast: blue + magenta → boost R and B, pull G down
+        arr += shadow_w    * np.array([ 0.03, -0.05,  0.07])
+        # Highlight cast: yellow + magenta → boost R, slight G, reduce B
+        arr += highlight_w * np.array([ 0.05,  0.02, -0.03])
+
+        return Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8))
+    if filter_name == "sepia":
+        grey = ImageOps.grayscale(img)
+        sepia = Image.new("RGB", grey.size)
+        pixels = grey.load()
+        out = sepia.load()
+        for y in range(grey.height):
+            for x in range(grey.width):
+                v = pixels[x, y]
+                out[x, y] = (
+                    min(255, int(v * 1.08)),
+                    min(255, int(v * 0.86)),
+                    min(255, int(v * 0.67)),
+                )
+        return sepia
+    return img  # "none" or unknown
+
+
+def _fit_photo_to_slot(photo_path: str, slot_width: int, slot_height: int, photo_filter: str = "none", final_exposure: float = 1.0) -> Image.Image:
     with Image.open(photo_path) as src:
         src_rgb = src.convert("RGB")
-        return ImageOps.fit(src_rgb, (slot_width, slot_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        fitted = ImageOps.fit(src_rgb, (slot_width, slot_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        return _apply_filter(fitted, photo_filter, final_exposure)
 
 
 def _draw_footer(

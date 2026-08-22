@@ -176,6 +176,11 @@ def main() -> None:
                     break
                 continue
 
+            # Camera is within grace period but no frame yet — wait silently
+            if frame is None:
+                cv2.waitKey(50)
+                continue
+
             if _oled_error_active:
                 if oled is not None:
                     oled.idle()

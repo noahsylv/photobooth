@@ -18,6 +18,14 @@ Desktop.ini
 captures/
 output/
 
+# Other
+other_photos/
+random assets/
+photo_filter_inspo/
+later_setup.txt
+EDSDK.dll
+test_capture.jpg
+
 # Logs
 *.log
 

@@ -15,6 +15,7 @@ from session import PhotoSession
 from strip import create_strip
 
 WINDOW_NAME = "Photobooth"
+DONE_HOLD_SECONDS = 15
 
 
 def draw_overlay(frame, lines: list[str]):
@@ -39,7 +40,12 @@ def draw_overlay(frame, lines: list[str]):
     return frame
 
 
-def run_session(camera: CameraController, config: AppConfig, oled: OledDisplay | None) -> tuple[list[str], str]:
+def run_session(
+    camera: CameraController,
+    config: AppConfig,
+    oled: OledDisplay | None,
+    show_preview: bool,
+) -> tuple[list[str], str]:
     def preview_callback(status: str, remaining: int) -> None:
         frame = camera.read_frame()
         lines = [status, f"Capturing in {remaining}"]
@@ -47,7 +53,14 @@ def run_session(camera: CameraController, config: AppConfig, oled: OledDisplay |
         cv2.imshow(WINDOW_NAME, preview)
         cv2.waitKey(1)
 
-    session = PhotoSession(camera=camera, config=config, preview_callback=preview_callback, oled=oled)
+    def console_callback(status: str, remaining: int) -> None:
+        if remaining != console_callback.last_remaining:
+            print(f"[session] {status} — capturing in {remaining}s")
+            console_callback.last_remaining = remaining
+
+    console_callback.last_remaining = 0
+    callback = preview_callback if show_preview else console_callback
+    session = PhotoSession(camera=camera, config=config, preview_callback=callback, oled=oled)
     photo_paths = session.run()
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -72,7 +85,7 @@ def run_dry_session(config: AppConfig, oled: OledDisplay | None) -> None:
     print("[dry-run] Session done, simulating print...")
     if oled is not None:
         oled.done()
-    time.sleep(2)
+    time.sleep(DONE_HOLD_SECONDS)
     print("[dry-run] Print complete.")
     if oled is not None:
         oled.idle()
@@ -82,6 +95,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Photobooth")
     parser.add_argument("--dry-run", action="store_true", help="Skip camera and printer; test OLED only")
     parser.add_argument("--no-print", action="store_true", help="Run full session and build strip but skip printing")
+    parser.add_argument("--preview", action="store_true", help="Show the live camera preview window")
     parser.add_argument(
         "--camera",
         choices=["canon", "webcam"],
@@ -103,14 +117,18 @@ def main() -> None:
         print("[dry-run] Press ENTER or the start button to trigger a session, or Ctrl-C to quit.")
         if oled is not None:
             oled.idle()
+            oled.flush_input()
         try:
             while True:
                 if oled is not None and oled.check_button():
                     run_dry_session(config, oled)
+                    oled.flush_input()
                 elif msvcrt.kbhit():
                     ch = msvcrt.getch()
                     if ch in (b'\r', b'\n'):
                         run_dry_session(config, oled)
+                        if oled is not None:
+                            oled.flush_input()
                     elif ch.lower() == b'q':
                         break
                 else:
@@ -127,10 +145,16 @@ def main() -> None:
 
     try:
         camera.connect()
-        camera.start_live_view()
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        if args.preview:
+            camera.start_live_view()
+            cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
         if oled is not None:
             oled.idle()
+            oled.flush_input()
+        if args.preview:
+            print("[session] Camera preview enabled. Press SPACE to start or Q to quit.")
+        else:
+            print("[session] Camera preview disabled. Press ENTER or use the start button to begin; Ctrl-C to quit.")
 
         camera_ok = True
         _camera_fail_since: float | None = None
@@ -140,15 +164,16 @@ def main() -> None:
         _CAMERA_GRACE = 5.0  # seconds before a camera failure is treated as an error
 
         while True:
-            try:
-                frame = camera.read_frame()
-                camera_ok = True
-                _camera_fail_since = None
-            except RuntimeError:
-                frame = None
-                if _camera_fail_since is None:
-                    _camera_fail_since = time.time()
-                camera_ok = (time.time() - _camera_fail_since) < _CAMERA_GRACE
+            frame = None
+            camera_ok = True
+            if args.preview:
+                try:
+                    frame = camera.read_frame()
+                    _camera_fail_since = None
+                except RuntimeError:
+                    if _camera_fail_since is None:
+                        _camera_fail_since = time.time()
+                    camera_ok = (time.time() - _camera_fail_since) < _CAMERA_GRACE
 
             # Periodic hardware check every 3 s
             now = time.time()
@@ -166,19 +191,23 @@ def main() -> None:
                 hw_errors.append("Camera not ready")
 
             if hw_errors:
-                if frame is None:
-                    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-                cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["! HARDWARE ERROR !"] + hw_errors))
+                if args.preview:
+                    if frame is None:
+                        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+                    cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["! HARDWARE ERROR !"] + hw_errors))
                 if oled is not None and not _oled_error_active:
                     oled.error(hw_errors[0])
                     _oled_error_active = True
-                if cv2.waitKey(200) & 0xFF == ord("q"):
+                if args.preview and cv2.waitKey(200) & 0xFF == ord("q"):
                     break
+                if not args.preview:
+                    time.sleep(0.2)
                 continue
 
             # Camera is within grace period but no frame yet — wait silently
-            if frame is None:
-                cv2.waitKey(50)
+            if args.preview and frame is None:
+                if args.preview:
+                    cv2.waitKey(50)
                 continue
 
             if _oled_error_active:
@@ -186,31 +215,41 @@ def main() -> None:
                     oled.idle()
                 _oled_error_active = False
 
-            preview = draw_overlay(frame, ["Press SPACE to start", "Press Q to quit"])
-            cv2.imshow(WINDOW_NAME, preview)
-
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
+            key = -1
+            if args.preview:
+                preview = draw_overlay(frame, ["Press SPACE to start", "Press Q to quit"])
+                cv2.imshow(WINDOW_NAME, preview)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
 
             button_pressed = (oled is not None and oled.check_button())
-            if key == ord(" ") or button_pressed:
+            import msvcrt
+            console_start = not args.preview and msvcrt.kbhit() and msvcrt.getch() in (b"\r", b"\n")
+            if key == ord(" ") or button_pressed or console_start:
                 try:
-                    frame = camera.read_frame()
-                    cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Session running...", "Please look at camera"]))
-                    cv2.waitKey(1)
-                    photo_paths, final_print_path = run_session(camera, config, oled)
+                    if oled is not None:
+                        # Ignore any extra taps collected before this session starts.
+                        oled.flush_input()
+                    if args.preview:
+                        frame = camera.read_frame()
+                        cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Session running...", "Please look at camera"]))
+                        cv2.waitKey(1)
+                    print("[session] Starting photo session...")
+                    photo_paths, final_print_path = run_session(camera, config, oled, args.preview)
                     if oled is not None:
                         oled.done()
 
                     if args.no_print:
                         print(f"[no-print] Strip saved to {final_print_path} — printing skipped.")
-                        frame = camera.read_frame()
-                        cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Done! (no print)", "Press SPACE for next session"]))
+                        if args.preview:
+                            frame = camera.read_frame()
+                            cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Done! (no print)", "Press SPACE for next session"]))
                     else:
-                        frame = camera.read_frame()
-                        cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Printing...", "Please wait"]))
-                        cv2.waitKey(1)
+                        if args.preview:
+                            frame = camera.read_frame()
+                            cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Printing...", "Please wait"]))
+                            cv2.waitKey(1)
 
                         print_image(
                             final_print_path,
@@ -218,9 +257,14 @@ def main() -> None:
                             rotation_degrees=config.PRINTER_ROTATION_DEGREES,
                         )
 
-                        frame = camera.read_frame()
-                        cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Done!", "Press SPACE for next session"]))
-                    cv2.waitKey(1200)
+                        if args.preview:
+                            frame = camera.read_frame()
+                            cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Done!", "Press SPACE for next session"]))
+                    print(f"[session] Complete — strip saved to {final_print_path}")
+                    if args.preview:
+                        cv2.waitKey(DONE_HOLD_SECONDS * 1000)
+                    else:
+                        time.sleep(DONE_HOLD_SECONDS)
                     if oled is not None:
                         oled.flush_input()
                         oled.idle()
@@ -229,9 +273,13 @@ def main() -> None:
                         frame = camera.read_frame()
                     except RuntimeError:
                         frame = None
-                    if frame is not None:
+                    if args.preview and frame is not None:
                         cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Error", str(exc)[:60]]))
-                    cv2.waitKey(1800)
+                    if args.preview:
+                        cv2.waitKey(1800)
+                    else:
+                        print(f"[session] Error: {exc}")
+                        time.sleep(1.8)
                     if oled is not None:
                         oled.flush_input()
                         oled.idle()

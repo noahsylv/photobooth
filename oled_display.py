@@ -64,6 +64,10 @@ class OledDisplay:
     def done(self) -> None:
         self._send("DONE")
 
+    def animate(self, frames: int, delay_ms: int = 100) -> None:
+        """Show a built-in animation on the Pico OLED."""
+        self._send(f"ANIMATE:{frames}:{delay_ms}")
+
     def error(self, message: str) -> None:
         """Display an error message on the OLED."""
         self._send(f"ERROR:{message[:64]}")

@@ -33,6 +33,7 @@ class PhotoSession:
 
         for i in range(self.config.PHOTO_COUNT):
             self._run_countdown(i)
+            time.sleep(self.config.CAPTURE_SETTLE_SECONDS)
 
             photo_path = self._build_filename(session_dir, prefix=f"photo_{i + 1}")
             saved_path = self.camera.capture_photo(photo_path)
@@ -45,12 +46,14 @@ class PhotoSession:
 
     def _run_countdown(self, index: int) -> None:
         for remaining in range(self.config.COUNTDOWN_SECONDS, 0, -1):
+            deadline = time.monotonic() + 1.0
             status = f"Photo {index + 1} of {self.config.PHOTO_COUNT}"
+            if self.preview_callback is not None:
+                self.preview_callback(status, remaining)
             if self.oled is not None:
                 self.oled.countdown(index + 1, self.config.PHOTO_COUNT, remaining)
             # Spin for ~1 second calling preview_callback at display rate so
             # the OpenCV window stays responsive (cv2.waitKey pumps Win32 msgs).
-            deadline = time.monotonic() + 1.0
             while time.monotonic() < deadline:
                 if self.preview_callback is not None:
                     self.preview_callback(status, remaining)

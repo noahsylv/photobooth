@@ -1,0 +1,12 @@
+                 Beelink Mini PC
+          (Python Photobooth Application)
+
+               USB Serial Connection
+                       │
+                       │
+               Raspberry Pi Pico 2 W
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+      OLED         Start Button   Service Button
+                                   (hidden)

@@ -5,6 +5,7 @@ Listens on USB serial for line-based commands from the host:
   IDLE                       -> show idle/ready screen
   COUNTDOWN:<n>:<status>     -> show big countdown number + status line
   DONE                       -> show "Printing..." screen
+  ANIMATE:<frames>:<delay_ms> -> show a built-in animation sequence
 
 The SH1106 driver is embedded so no external packages are needed.
 """
@@ -12,6 +13,8 @@ The SH1106 driver is embedded so no external packages are needed.
 import sys
 import select
 import time
+import math
+import random
 import framebuf
 from machine import I2C, Pin
 
@@ -87,44 +90,157 @@ def _draw_big_char(oled, char, x, y, scale=4):
                 oled.fill_rect(x + cx * scale, y + cy * scale, scale, scale, 1)
 
 
+def _draw_circle(oled, cx, cy, r, col=1):
+    """Draw a circle outline using the midpoint algorithm."""
+    x, y, d = r, 0, 1 - r
+    while x >= y:
+        for dx, dy in ((x,y),(x,-y),(-x,y),(-x,-y),(y,x),(y,-x),(-y,x),(-y,-x)):
+            px, py = cx + dx, cy + dy
+            if 0 <= px < 128 and 0 <= py < 64:
+                oled.pixel(px, py, col)
+        y += 1
+        if d <= 0:
+            d += 2 * y + 1
+        else:
+            x -= 1
+            d += 2 * (y - x) + 1
+
+
+def _draw_line(oled, x0, y0, x1, y1, col=1):
+    """Draw a line using Bresenham's algorithm."""
+    dx = abs(x1 - x0); dy = abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        if 0 <= x0 < 128 and 0 <= y0 < 64:
+            oled.pixel(x0, y0, col)
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy; x0 += sx
+        if e2 < dx:
+            err += dx; y0 += sy
+
+
+def _fill_pie(oled, cx, cy, r, start_angle, sweep_angle, col=1, step=0.05):
+    """Fill a circular pie sector by casting closely-spaced radius lines.
+
+    Faster on MicroPython than a per-pixel angle test since it avoids an
+    atan2() call for every pixel in the bounding box.
+    """
+    a = 0.0
+    while a < sweep_angle:
+        ang = start_angle + a
+        ex = int(cx + r * math.cos(ang))
+        ey = int(cy + r * math.sin(ang))
+        _draw_line(oled, cx, cy, ex, ey, col)
+        a += step
+    # Always draw the exact boundary ray so the edge is crisp.
+    ang = start_angle + sweep_angle
+    ex = int(cx + r * math.cos(ang))
+    ey = int(cy + r * math.sin(ang))
+    _draw_line(oled, cx, cy, ex, ey, col)
+
+
+def _draw_text_centered(oled, text: str, y: int, col: int = 1, max_chars: int = 16):
+    """Draw 8x8 framebuf text centered on the 128px-wide OLED."""
+    clipped = text[:max_chars]
+    x = max((128 - len(clipped) * 8) // 2, 0)
+    oled.text(clipped, x, y, col)
+
+
 def show_error(oled, msg: str):
     oled.fill(0)
-    oled.text("! ERROR !", 19, 0, 1)
-    oled.text(msg[:16], 0, 20, 1)
+    _draw_text_centered(oled, "! ERROR !", 0, 1)
+    _draw_text_centered(oled, msg, 20, 1)
     if len(msg) > 16:
-        oled.text(msg[16:32], 0, 30, 1)
+        _draw_text_centered(oled, msg[16:32], 30, 1)
     oled.show()
 
 
 def show_idle(oled):
     oled.fill(0)
-    oled.text("Photobooth", 19, 20)
-    oled.text("Press start!", 16, 36)
+    _draw_text_centered(oled, "Press Start", 28, 1)
     oled.show()
 
 
 def show_countdown(oled, n: int, status: str):
-    oled.fill(0)
-    # Status line at top (truncate to 16 chars for 128px)
-    oled.text(status[:16], 0, 0, 1)
-    # Big number centred below
-    s = str(n)
-    scale = 4
-    char_w = 8 * scale
-    total_w = len(s) * char_w
-    x = (128 - total_w) // 2
-    y = 16
-    for i, ch in enumerate(s):
-        _draw_big_char(oled, ch, x + i * char_w, y, scale=scale)
-    oled.show()
+    """Film-leader style animated countdown. Runs for ~1 second per call.
+
+    The circle starts empty (light) and a wedge sweeps clockwise from the
+    top, progressively filling the circle solid by the end of the second.
+    """
+    CCX, CCY, R = 64, 28, 22  # circle centre and radius
+    FPS = 6
+    start_angle = -math.pi / 2  # 12 o'clock
+    start_ms = time.ticks_ms()
+
+    for f in range(FPS):
+        oled.fill(0)
+
+        # Full-screen crosshairs
+        oled.hline(0, CCY, 128, 1)
+        oled.vline(CCX, 0, 64, 1)
+
+        # Progressively filled wedge: empty at f=0, full circle at f=FPS-1
+        progress = f / (FPS - 1)
+        sweep_angle = progress * 2 * math.pi
+        if sweep_angle > 0:
+            _fill_pie(oled, CCX, CCY, R, start_angle, sweep_angle, 1)
+
+        # Outer circle outline (crisp edge even where already filled)
+        _draw_circle(oled, CCX, CCY, R, 1)
+
+        # Clear centre box so number sits on a clean background
+        hw = 14
+        oled.fill_rect(CCX - hw, CCY - hw, hw * 2, hw * 2, 0)
+
+        # Big countdown number centred in the circle (scale 3 = 24x24 px/digit)
+        s = str(n)
+        scale = 3
+        char_w = 8 * scale
+        total_w = len(s) * char_w
+        tx = CCX - total_w // 2
+        ty = CCY - (8 * scale) // 2
+        for i, ch in enumerate(s):
+            _draw_big_char(oled, ch, tx + i * char_w, ty, scale=scale)
+
+        # Film grain disabled by request.
+        # for _ in range(4):
+        #     oled.pixel(random.randint(0, 127), random.randint(0, 63), 1)
+
+        oled.show()
+        target_ms = time.ticks_add(start_ms, (f + 1) * 1000 // FPS)
+        wait_ms = time.ticks_diff(target_ms, time.ticks_ms())
+        if wait_ms > 0:
+            time.sleep_ms(wait_ms)
 
 
 def show_done(oled):
     oled.fill(0)
-    oled.text("All done!", 24, 20)
-    oled.text("Printing...", 20, 36)
+    _draw_text_centered(oled, "Printing...", 20, 1)
+    _draw_text_centered(oled, "Pickup outside", 36, 1)
     oled.show()
 
+def show_animation(oled, frames: int, delay_ms: int) -> None:
+    """Render a simple built-in animation sequence on the OLED."""
+    for frame in range(frames):
+        oled.fill(0)
+        # bouncing square animation
+        step = frame % 16
+        if step < 8:
+            x = 10 + step * 9
+        else:
+            x = 10 + (15 - step) * 9
+        y = 26
+        oled.rect(0, 0, 128, 64, 1)
+        _draw_text_centered(oled, "OLED ANIM", 4, 1)
+        oled.fill_rect(x, y, 10, 10, 1)
+        _draw_text_centered(oled, f"Frame {frame + 1}/{frames}", 52, 1)
+        oled.show()
+        time.sleep_ms(delay_ms)
 
 # ---------------------------------------------------------------------------
 # Main loop
@@ -156,6 +272,14 @@ def _handle_command(oled, cmd: str) -> None:
             return
         status = parts[2] if len(parts) > 2 else ""
         show_countdown(oled, n, status)
+    elif cmd.startswith("ANIMATE:"):
+        parts = cmd.split(":", 2)
+        try:
+            frames = int(parts[1])
+            delay_ms = int(parts[2]) if len(parts) > 2 else 100
+        except (IndexError, ValueError):
+            return
+        show_animation(oled, frames, delay_ms)
 
 
 def main():

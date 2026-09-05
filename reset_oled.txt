@@ -1,0 +1,2 @@
+mpremote connect COM3 fs cp pico_main.py :main.py;
+mpremote connect COM3 reset

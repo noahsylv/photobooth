@@ -1,0 +1,1 @@
+Stop-Process -Name python,py -Force -ErrorAction SilentlyContinue; Write-Host "Done"

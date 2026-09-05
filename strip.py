@@ -152,6 +152,7 @@ def _apply_filter(img: Image.Image, filter_name: str, final_exposure: float = 1.
 
 def _fit_photo_to_slot(photo_path: str, slot_width: int, slot_height: int, photo_filter: str = "none", final_exposure: float = 1.0) -> Image.Image:
     with Image.open(photo_path) as src:
+        src = ImageOps.exif_transpose(src)
         src_rgb = src.convert("RGB")
         fitted = ImageOps.fit(src_rgb, (slot_width, slot_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
         return _apply_filter(fitted, photo_filter, final_exposure)

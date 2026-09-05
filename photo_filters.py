@@ -50,7 +50,8 @@ def _apply_split_tone(image: Image.Image) -> Image.Image:
 
 def _apply_grain(image: Image.Image, strength: float = 0.06) -> Image.Image:
     arr = np.array(image, dtype=float)
-    noise = np.random.normal(0, strength * 255.0, arr.shape)
+    noise = np.random.normal(0, strength * 255.0, arr.shape[:2])
+    noise = noise[:, :, np.newaxis]
     arr = np.clip(arr + noise, 0, 255).astype(np.uint8)
     return Image.fromarray(arr)
 
@@ -110,7 +111,7 @@ def apply_photo_filter(image: Image.Image, filter_name: str, exposure_factor: fl
             [(0, 0), (64, 30), (176, 164), (250, 191), (255, 255)],
         )
         adjusted = _apply_split_tone(adjusted)
-        adjusted = _apply_grain(adjusted, strength=0.08)
+        adjusted = _apply_grain(adjusted, strength=0.0)
         return adjusted
 
     return image

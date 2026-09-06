@@ -216,6 +216,7 @@ def show_countdown(oled, n: int, status: str):
         wait_ms = time.ticks_diff(target_ms, time.ticks_ms())
         if wait_ms > 0:
             time.sleep_ms(wait_ms)
+    print("COUNTDOWN_DONE")
 
 
 def show_done(oled):

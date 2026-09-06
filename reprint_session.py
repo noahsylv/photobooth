@@ -28,13 +28,52 @@ def find_latest_session(captures_dir: Path) -> Path | None:
     return sessions[0] if sessions else None
 
 
-def find_session_photos(photos_dir: Path, photo_count: int) -> list[str]:
-    photos = sorted(photos_dir.glob("*.jpg"))
-    if len(photos) != photo_count:
-        raise ValueError(
-            f"Expected {photo_count} JPG photos in {photos_dir}, found {len(photos)}."
-        )
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+
+
+def find_session_photos(photos_dir: Path) -> list[str]:
+    # PIL opens JPG/PNG transparently, so no conversion to JPG is needed.
+    photos = sorted(
+        path
+        for path in photos_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
     return [str(path) for path in photos]
+
+
+def parse_indices(value: str) -> list[int]:
+    try:
+        return [int(part.strip()) for part in value.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid indices {value!r}; use comma-separated integers, e.g. 0,2,3,7."
+        )
+
+
+def select_photos(
+    photo_paths: list[str], indices: list[int] | None, photo_count: int
+) -> list[str]:
+    if indices is not None:
+        if len(indices) != photo_count:
+            raise ValueError(
+                f"Expected {photo_count} indices, got {len(indices)}."
+            )
+        selected = []
+        for idx in indices:
+            if not 0 <= idx < len(photo_paths):
+                raise ValueError(
+                    f"Index {idx} is out of range; {len(photo_paths)} photos available "
+                    f"(valid: 0-{len(photo_paths) - 1})."
+                )
+            selected.append(photo_paths[idx])
+        return selected
+    if len(photo_paths) != photo_count:
+        raise ValueError(
+            f"Expected {photo_count} photos ({', '.join(IMAGE_EXTENSIONS)}) "
+            f"in the folder, found {len(photo_paths)}. "
+            f"Use --indices to pick which ones, e.g. --indices 0,2,3,7."
+        )
+    return photo_paths
 
 
 def get_screen_size() -> tuple[int, int]:
@@ -82,8 +121,19 @@ def parse_args() -> argparse.Namespace:
         "--photos-dir",
         type=Path,
         help=(
-            "Arbitrary folder of JPG photos to use instead of a capture session "
-            "(overrides --session-dir/--captures-dir)."
+            "Arbitrary folder of photos (JPG/PNG) to use instead of a capture "
+            "session (overrides --session-dir/--captures-dir)."
+        ),
+    )
+    parser.add_argument(
+        "--indices",
+        type=parse_indices,
+        default=None,
+        metavar="0,2,3,7",
+        help=(
+            "Comma-separated indices of photos to use when the folder contains "
+            "more than PHOTO_COUNT photos. Indices follow alphabetical order of "
+            "filenames, starting at 0."
         ),
     )
     parser.add_argument(
@@ -146,7 +196,9 @@ def main() -> int:
             return 1
 
     try:
-        photo_paths = find_session_photos(source_dir, config.PHOTO_COUNT)
+        photo_paths = select_photos(
+            find_session_photos(source_dir), args.indices, config.PHOTO_COUNT
+        )
     except ValueError as exc:
         print(exc)
         return 1

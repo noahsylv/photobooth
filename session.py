@@ -10,6 +10,7 @@ from config import AppConfig
 
 if TYPE_CHECKING:
     from oled_display import OledDisplay
+    from click_sound import ClickSound
 
 PreviewCallback = Callable[[str, int], None]
 
@@ -21,11 +22,13 @@ class PhotoSession:
         config: AppConfig,
         preview_callback: PreviewCallback | None = None,
         oled: OledDisplay | None = None,
+        click: ClickSound | None = None,
     ):
         self.camera = camera
         self.config = config
         self.preview_callback = preview_callback
         self.oled = oled
+        self.click = click
 
     def run(self) -> list[str]:
         session_dir = self._create_session_dir()
@@ -46,19 +49,36 @@ class PhotoSession:
 
     def _run_countdown(self, index: int) -> None:
         for remaining in range(self.config.COUNTDOWN_SECONDS, 0, -1):
-            deadline = time.monotonic() + 1.0
             status = f"Photo {index + 1} of {self.config.PHOTO_COUNT}"
             if self.preview_callback is not None:
                 self.preview_callback(status, remaining)
             if self.oled is not None:
                 self.oled.countdown(index + 1, self.config.PHOTO_COUNT, remaining)
-            # Spin for ~1 second calling preview_callback at display rate so
-            # the OpenCV window stays responsive (cv2.waitKey pumps Win32 msgs).
-            while time.monotonic() < deadline:
-                if self.preview_callback is not None:
-                    self.preview_callback(status, remaining)
-                else:
-                    time.sleep(0.05)
+            self._wait_one_second(status, remaining)
+            if self.click is not None:
+                self.click.play()
+
+    def _wait_one_second(self, status: str, remaining: int) -> None:
+        """Pace ~1s per countdown tick, pumping the preview callback throughout.
+
+        If the OLED is connected, waits for its "COUNTDOWN_DONE" ack instead of
+        a fixed 1s so a click sound stays in sync with what's actually drawn
+        (the Pico's animation can occasionally run long). Falls back to a
+        fixed timeout if no ack ever arrives, so this can't hang forever.
+        """
+        start = time.monotonic()
+        timeout = 1.5
+        while True:
+            if self.preview_callback is not None:
+                self.preview_callback(status, remaining)
+            else:
+                time.sleep(0.05)
+            elapsed = time.monotonic() - start
+            if self.oled is not None:
+                if self.oled.check_countdown_done() or elapsed >= timeout:
+                    return
+            elif elapsed >= 1.0:
+                return
 
     def _build_filename(self, directory: Path, prefix: str = "photo") -> Path:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")

@@ -61,6 +61,43 @@ class OledDisplay:
         status = f"Photo {photo_num} of {total}"
         self._send(f"COUNTDOWN:{seconds}:{status}")
 
+    def check_countdown_done(self) -> bool:
+        """Non-blocking check for a queued "COUNTDOWN_DONE" ack from the Pico.
+
+        Lets a caller pump other work (e.g. a camera preview loop) while
+        waiting, instead of blocking like countdown_sync().
+        """
+        if not self._connected:
+            return False
+        try:
+            waiting = self._serial.in_waiting
+            if waiting > 0:
+                self._buf += self._serial.read(waiting).decode(errors="ignore")
+            while "\n" in self._buf:
+                line, self._buf = self._buf.split("\n", 1)
+                if line.strip() == "COUNTDOWN_DONE":
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def countdown_sync(self, photo_num: int, total: int, seconds: int, timeout: float = 2.0) -> None:
+        """Like countdown(), but blocks until the Pico reports it finished drawing.
+
+        The Pico's per-second animation can occasionally run long; waiting for
+        its "COUNTDOWN_DONE" ack (rather than assuming it takes exactly 1s)
+        keeps a click/tick sound in sync with what's actually on screen.
+        Falls back to returning after `timeout` if no ack arrives (e.g. not connected).
+        """
+        self.countdown(photo_num, total, seconds)
+        if not self._connected:
+            return
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.check_countdown_done():
+                return
+            time.sleep(0.005)
+
     def done(self) -> None:
         self._send("DONE")
 

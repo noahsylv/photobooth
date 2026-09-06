@@ -54,6 +54,11 @@ class AppConfig:
     # Full path to EDSDK.dll.  None = auto-detect from common Canon install paths.
     EDSDK_DLL_PATH: str | None = None
 
+    # Countdown tick/click sound (plays every second during the countdown)
+    CLICK_SOUND_ENABLED: bool = True
+    CLICK_SOUND_PATH: Path = Path("audio/timer.mp3")
+    CLICK_SOUND_DURATION_MS: int = 150  # how much of the file's start to play
+
     @property
     def STRIP_WIDTH(self) -> int:
         """Derived: strips are adjacent at the cut line, so each is half the print width."""

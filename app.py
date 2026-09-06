@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 
 from camera_controller import CameraController
+from click_sound import ClickSound
 from config import AppConfig
 from oled_display import OledDisplay
 from printer import check_printer_ready, print_image
@@ -44,6 +45,7 @@ def run_session(
     camera: CameraController,
     config: AppConfig,
     oled: OledDisplay | None,
+    click: ClickSound | None,
     show_preview: bool,
 ) -> tuple[list[str], str]:
     def preview_callback(status: str, remaining: int) -> None:
@@ -60,7 +62,7 @@ def run_session(
 
     console_callback.last_remaining = 0
     callback = preview_callback if show_preview else console_callback
-    session = PhotoSession(camera=camera, config=config, preview_callback=callback, oled=oled)
+    session = PhotoSession(camera=camera, config=config, preview_callback=callback, oled=oled, click=click)
     photo_paths = session.run()
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -70,15 +72,18 @@ def run_session(
     return photo_paths, final_print_path
 
 
-def run_dry_session(config: AppConfig, oled: OledDisplay | None) -> None:
+def run_dry_session(config: AppConfig, oled: OledDisplay | None, click: ClickSound | None) -> None:
     """Simulate a full session with sleeps only — no camera, no printer."""
     print("[dry-run] Starting session...")
     for i in range(config.PHOTO_COUNT):
         for remaining in range(config.COUNTDOWN_SECONDS, 0, -1):
             print(f"[dry-run] Photo {i + 1}/{config.PHOTO_COUNT} — {remaining}s")
             if oled is not None:
-                oled.countdown(i + 1, config.PHOTO_COUNT, remaining)
-            time.sleep(1)
+                oled.countdown_sync(i + 1, config.PHOTO_COUNT, remaining)
+            else:
+                time.sleep(1)
+            if click is not None:
+                click.play()
         print(f"[dry-run] *click* photo {i + 1}")
         if i < config.PHOTO_COUNT - 1:
             time.sleep(config.DELAY_BETWEEN_PHOTOS)
@@ -112,6 +117,10 @@ def main() -> None:
     if config.PICO_PORT is not None:
         oled = OledDisplay(config.PICO_PORT)
 
+    click: ClickSound | None = None
+    if config.CLICK_SOUND_ENABLED:
+        click = ClickSound(config.CLICK_SOUND_PATH, config.CLICK_SOUND_DURATION_MS)
+
     if args.dry_run:
         import msvcrt
         print("[dry-run] Press ENTER or the start button to trigger a session, or Ctrl-C to quit.")
@@ -121,12 +130,12 @@ def main() -> None:
         try:
             while True:
                 if oled is not None and oled.check_button():
-                    run_dry_session(config, oled)
+                    run_dry_session(config, oled, click)
                     oled.flush_input()
                 elif msvcrt.kbhit():
                     ch = msvcrt.getch()
                     if ch in (b'\r', b'\n'):
-                        run_dry_session(config, oled)
+                        run_dry_session(config, oled, click)
                         if oled is not None:
                             oled.flush_input()
                     elif ch.lower() == b'q':
@@ -139,6 +148,8 @@ def main() -> None:
             if oled is not None:
                 oled.clear()
                 oled.close()
+            if click is not None:
+                click.close()
         return
 
     camera = _build_camera(args, config)
@@ -236,7 +247,7 @@ def main() -> None:
                         cv2.imshow(WINDOW_NAME, draw_overlay(frame, ["Session running...", "Please look at camera"]))
                         cv2.waitKey(1)
                     print("[session] Starting photo session...")
-                    photo_paths, final_print_path = run_session(camera, config, oled, args.preview)
+                    photo_paths, final_print_path = run_session(camera, config, oled, click, args.preview)
                     if oled is not None:
                         oled.done()
 
@@ -290,6 +301,8 @@ def main() -> None:
         if oled is not None:
             oled.clear()
             oled.close()
+        if click is not None:
+            click.close()
 
 
 def _build_camera(args: argparse.Namespace, config: AppConfig) -> CameraController:

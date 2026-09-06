@@ -19,7 +19,8 @@ Rebuild (and optionally print) a strip from an existing capture session or an ar
 | --- | --- |
 | `--filter {none,bw,sepia,vintage,vintage2,final}` | Filter to apply; defaults to `config.PHOTO_FILTER` |
 | `--session-dir PATH` | Session directory to use; defaults to the newest session |
-| `--photos-dir PATH` | Arbitrary folder of JPG photos to use instead of a capture session (overrides `--session-dir`/`--captures-dir`) |
+| `--photos-dir PATH` | Arbitrary folder of photos (JPG/PNG) to use instead of a capture session (overrides `--session-dir`/`--captures-dir`) |
+| `--indices 0,2,3,7` | Pick which photos to use when the folder has more than `PHOTO_COUNT` images; indices follow alphabetical filename order |
 | `--captures-dir PATH` | Directory containing sessions; defaults to `config.py` |
 | `--output PATH`, `-o PATH` | Output strip path; defaults to `output/reprint_<timestamp>.jpg` |
 | `--final-exposure FLOAT` | Exposure multiplier for the `final` filter |

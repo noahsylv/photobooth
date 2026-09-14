@@ -144,26 +144,68 @@ def _fill_pie(oled, cx, cy, r, start_angle, sweep_angle, col=1, step=0.05):
     _draw_line(oled, cx, cy, ex, ey, col)
 
 
-def _draw_text_centered(oled, text: str, y: int, col: int = 1, max_chars: int = 16):
-    """Draw 8x8 framebuf text centered on the 128px-wide OLED."""
+def _draw_text_scaled(oled, text: str, x: int, y: int, scale: int = 1, col: int = 1):
+    """Draw text scaled up using the same per-char pixel trick as countdown digits."""
+    for i, ch in enumerate(text):
+        _draw_big_char(oled, ch, x + i * 8 * scale, y, scale=scale)
+
+
+def _draw_text_centered(oled, text: str, y: int, col: int = 1, max_chars: int = 16, scale: int = 1):
+    """Draw text centered on the 128px-wide OLED, shrinking scale if it wouldn't fit."""
     clipped = text[:max_chars]
-    x = max((128 - len(clipped) * 8) // 2, 0)
-    oled.text(clipped, x, y, col)
+    while scale > 1 and len(clipped) * 8 * scale > 128:
+        scale -= 1
+    char_w = 8 * scale
+    x = max((128 - len(clipped) * char_w) // 2, 0)
+    if scale == 1:
+        oled.text(clipped, x, y, col)
+    else:
+        _draw_text_scaled(oled, clipped, x, y, scale, col)
 
 
 def show_error(oled, msg: str):
     oled.fill(0)
-    _draw_text_centered(oled, "! ERROR !", 0, 1)
-    _draw_text_centered(oled, msg, 20, 1)
+    _draw_text_centered(oled, "ERROR", 0, 1, scale=2)
+    _draw_text_centered(oled, msg, 34, 1)
     if len(msg) > 16:
-        _draw_text_centered(oled, msg[16:32], 30, 1)
+        _draw_text_centered(oled, msg[16:32], 46, 1)
     oled.show()
+
+
+def _draw_arrow_up(oled, cx: int, cy: int, size: int = 12, col: int = 1):
+    """Draw a simple up arrow with a thicker base/tail."""
+    # longer tail / thicker stem
+    for y in range(cy, cy + 10):
+        for dx in range(-3, 4):
+            px = cx + dx
+            if 0 <= px < 128 and 0 <= y < 64:
+                oled.pixel(px, y, col)
+    # wide head: point upward, base thickened
+    for dy in range(size + 1):
+        half = size - dy
+        if half < 0:
+            half = 0
+        if dy == 0:
+            half += 2
+        for dx in range(-half, half + 1):
+            py = cy - dy
+            px = cx + dx
+            if 0 <= px < 128 and 0 <= py < 64:
+                oled.pixel(px, py, col)
 
 
 def show_idle(oled):
     oled.fill(0)
-    _draw_text_centered(oled, "Press Start", 28, 1)
+    _draw_arrow_up(oled, 64, 16, size=10, col=1)
+    _draw_text_centered(oled, "PRESS", 35, 1, scale=2)
+    _draw_text_centered(oled, "START", 50, 1, scale=2)
     oled.show()
+
+    # Old text-only idle screen kept here for quick rollback if needed.
+    # oled.fill(0)
+    # _draw_text_centered(oled, "PRESS", 12, 1, scale=2)
+    # _draw_text_centered(oled, "START", 36, 1, scale=2)
+    # oled.show()
 
 
 def show_countdown(oled, n: int, status: str):
@@ -221,8 +263,9 @@ def show_countdown(oled, n: int, status: str):
 
 def show_done(oled):
     oled.fill(0)
-    _draw_text_centered(oled, "Printing...", 20, 1)
-    _draw_text_centered(oled, "Pickup outside", 36, 1)
+    _draw_text_centered(oled, "PRINTING", 12, 1, scale=1)
+    _draw_text_centered(oled, "PICKUP", 28, 1, scale=2)
+    _draw_text_centered(oled, "OUTSIDE", 46, 1, scale=2)
     oled.show()
 
 def show_animation(oled, frames: int, delay_ms: int) -> None:

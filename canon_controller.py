@@ -220,7 +220,9 @@ class CanonController(CameraController):
                 "No Canon camera detected.\n"
                 "  • Ensure the camera is connected via USB and powered on.\n"
                 "  • Close Canon EOS Utility if it is running.\n"
-                "  • Try a different USB port or cable."
+                "  • Try a different USB port or cable.\n"
+                "  • No camera handy? Run with --dry-run (no camera/printer needed),\n"
+                "    or --camera webcam to use a USB webcam instead."
             )
 
         camera_ref = ctypes.c_void_p()

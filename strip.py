@@ -33,6 +33,31 @@ def create_strip(
     return str(out_path)
 
 
+def slot_inner_size(config: AppConfig, side: str = "L", idx: int = 0) -> tuple[int, int]:
+    """Return the (inner_w, inner_h) a photo is fit into for a given strip slot,
+    i.e. the same dimensions _build_single_strip passes to _fit_photo_to_slot."""
+    margin_left  = config.MARGIN_INNER if side == "R" else config.MARGIN_OUTER
+    margin_right = config.MARGIN_OUTER if side == "R" else config.MARGIN_INNER
+    margin_top    = config.MARGIN_TOP
+    margin_bottom = config.MARGIN_BOTTOM
+    gap           = config.PHOTO_GAP
+    footer_height = config.FOOTER_HEIGHT if config.SHOW_FOOTER else 0
+    photo_border  = config.PHOTO_BORDER
+
+    available_height = (
+        config.STRIP_HEIGHT - margin_top - margin_bottom
+        - footer_height - (gap * (config.PHOTO_COUNT - 1))
+    )
+    slot_height_base = available_height // config.PHOTO_COUNT
+    slot_height_remainder = available_height % config.PHOTO_COUNT
+    slot_width = config.STRIP_WIDTH - margin_left - margin_right
+    slot_height = slot_height_base + (1 if idx < slot_height_remainder else 0)
+    return (
+        max(1, slot_width - (photo_border * 2)),
+        max(1, slot_height - (photo_border * 2)),
+    )
+
+
 def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "") -> Image.Image:
     strip = Image.new("RGB", (config.STRIP_WIDTH, config.STRIP_HEIGHT), config.STRIP_BACKGROUND_COLOR)
     draw = ImageDraw.Draw(strip)
@@ -77,6 +102,8 @@ def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "
             config.PHOTO_FILTER,
             config.PHOTO_FILTER_FINAL_EXPOSURE,
             (config.PHOTO_CROP_CENTER_X, config.PHOTO_CROP_CENTER_Y),
+            config.PHOTO_CROP_TOP_TRIM,
+            config.PHOTO_CROP_BOTTOM_TRIM,
         )
         strip.paste(slot, (slot_left + photo_border, slot_top + photo_border))
 
@@ -158,12 +185,25 @@ def _fit_photo_to_slot(
     photo_filter: str = "none",
     final_exposure: float = 1.0,
     crop_center: tuple[float, float] = (0.5, 0.5),
+    top_trim: float = 0.0,
+    bottom_trim: float = 0.0,
 ) -> Image.Image:
     with Image.open(photo_path) as src:
         src = ImageOps.exif_transpose(src)
         src_rgb = src.convert("RGB")
+        src_rgb = _trim_top_bottom(src_rgb, top_trim, bottom_trim)
         fitted = _cover_crop(src_rgb, slot_width, slot_height, crop_center)
         return _apply_filter(fitted, photo_filter, final_exposure)
+
+
+def _trim_top_bottom(img: Image.Image, top_trim: float, bottom_trim: float) -> Image.Image:
+    """Remove a fixed fraction of the image's height from the top and/or bottom."""
+    if top_trim <= 0 and bottom_trim <= 0:
+        return img
+    w, h = img.size
+    top = min(h - 1, max(0, int(h * top_trim)))
+    bottom = h - min(h - top - 1, max(0, int(h * bottom_trim)))
+    return img.crop((0, top, w, bottom))
 
 
 # Zoom-in factor (fraction of the max-cover crop) used at the extremes of
@@ -192,6 +232,17 @@ def _cover_crop(
     output aspect ratio always matches target_w/target_h, so the image is
     never stretched.
     """
+    box = cover_crop_box(img, target_w, target_h, center)
+    return img.resize((target_w, target_h), resample=Image.Resampling.LANCZOS, box=box)
+
+
+def cover_crop_box(
+    img: Image.Image,
+    target_w: int,
+    target_h: int,
+    center: tuple[float, float] = (0.5, 0.5),
+) -> tuple[float, float, float, float]:
+    """Return the (x0, y0, x1, y1) crop box _cover_crop would use, without resizing."""
     src_w, src_h = img.size
     target_ratio = target_w / target_h
     src_ratio = src_w / src_h
@@ -212,8 +263,7 @@ def _cover_crop(
 
     x = (src_w - crop_w) * cx
     y = (src_h - crop_h) * cy
-    box = (x, y, x + crop_w, y + crop_h)
-    return img.resize((target_w, target_h), resample=Image.Resampling.LANCZOS, box=box)
+    return (x, y, x + crop_w, y + crop_h)
 
 
 

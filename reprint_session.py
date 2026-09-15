@@ -19,13 +19,17 @@ from printer import print_image
 from strip import create_strip
 
 
-def find_latest_session(captures_dir: Path) -> Path | None:
+def find_latest_session(captures_dir: Path, back: int = 0) -> Path | None:
+    """Return a session directory by recency; back=0 is the most recent,
+    back=1 is the 2nd most recent, etc."""
     sessions = sorted(
         (path for path in captures_dir.glob("session_*") if path.is_dir()),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
-    return sessions[0] if sessions else None
+    if not 0 <= back < len(sessions):
+        return None
+    return sessions[back]
 
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
@@ -118,6 +122,16 @@ def parse_args() -> argparse.Namespace:
         help="Session directory to use; defaults to the newest session.",
     )
     parser.add_argument(
+        "--back",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Select the Nth most recent session instead of the latest: "
+            "0=most recent (default), 1=2nd most recent, 2=3rd most recent, etc."
+        ),
+    )
+    parser.add_argument(
         "--photos-dir",
         type=Path,
         help=(
@@ -187,9 +201,12 @@ def main() -> int:
             return 1
     else:
         captures_dir = args.captures_dir or config.CAPTURES_DIR
-        source_dir = args.session_dir or find_latest_session(captures_dir)
+        source_dir = args.session_dir or find_latest_session(captures_dir, args.back)
         if source_dir is None:
-            print(f"No sessions found in {captures_dir}")
+            if args.session_dir is None and args.back > 0:
+                print(f"No session {args.back + 1} positions back found in {captures_dir}")
+            else:
+                print(f"No sessions found in {captures_dir}")
             return 1
         if not source_dir.is_dir():
             print(f"Session directory not found: {source_dir}")

@@ -76,7 +76,7 @@ class PhotoSession:
                 time.sleep(0.05)
             elapsed = time.monotonic() - start
             if self.oled is not None:
-                if self.oled.check_countdown_done() or elapsed >= timeout:
+                if self.oled.check_countdown_done(remaining) or elapsed >= timeout:
                     return
             elif elapsed >= 1.0:
                 return

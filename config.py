@@ -48,8 +48,15 @@ class AppConfig:
     # the frame (crop from the bottom/right); 1.0 = keep the bottom/right.
     # (The scaling needed to keep the aspect ratio undistorted is computed
     # automatically — this is the only value you need to tune.)
-    PHOTO_CROP_CENTER_X: float = 0.5
-    PHOTO_CROP_CENTER_Y: float = 0.5
+    PHOTO_CROP_CENTER_X: float = 0.55
+    PHOTO_CROP_CENTER_Y: float = 0.1
+
+    # Fixed extra trim applied before the centering above, as a fraction of
+    # the photo's height (0.0-1.0). Use these to remove unwanted headroom or
+    # chin/floor space independently of PHOTO_CROP_CENTER_Y — e.g.
+    # PHOTO_CROP_TOP_TRIM=0.1 deletes the top 10% of every photo outright.
+    PHOTO_CROP_TOP_TRIM: float = 0.1
+    PHOTO_CROP_BOTTOM_TRIM: float = 0.1
 
     CAPTURES_DIR: Path = Path("captures")
     OUTPUT_DIR: Path = Path("output")

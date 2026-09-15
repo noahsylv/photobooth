@@ -19,6 +19,7 @@ Rebuild (and optionally print) a strip from an existing capture session or an ar
 | --- | --- |
 | `--filter {none,bw,sepia,vintage,vintage2,final}` | Filter to apply; defaults to `config.PHOTO_FILTER` |
 | `--session-dir PATH` | Session directory to use; defaults to the newest session |
+| `--back N` | Select the Nth most recent session: `0`=most recent (default), `1`=2nd most recent, `2`=3rd most recent, etc. |
 | `--photos-dir PATH` | Arbitrary folder of photos (JPG/PNG) to use instead of a capture session (overrides `--session-dir`/`--captures-dir`) |
 | `--indices 0,2,3,7` | Pick which photos to use when the folder has more than `PHOTO_COUNT` images; indices follow alphabetical filename order |
 | `--captures-dir PATH` | Directory containing sessions; defaults to `config.py` |
@@ -28,12 +29,22 @@ Rebuild (and optionally print) a strip from an existing capture session or an ar
 | `--print` | Send the rebuilt strip to the configured printer |
 | `--no-print` | Only rebuild the strip; do not print it (default) |
 
+## `crop_preview.py`
+Shows the full, uncropped photo with a box around the region the current crop config (`PHOTO_CROP_CENTER_X/Y`, `PHOTO_CROP_TOP_TRIM`/`BOTTOM_TRIM`) would keep for the strip.
+
+| Arg | Description |
+| --- | --- |
+| `--photo PATH` | Exact photo path to preview; defaults to the most recent captured photo |
+| `--back N` | Select the Nth most recent captured photo instead of the latest: `0`=most recent (default), `1`=2nd most recent, etc. |
+| `--captures-dir PATH` | Directory containing sessions; defaults to `config.py` |
+| `--side {L,R}` | Which strip side's slot aspect ratio to preview (default: `L`) |
+
 ## `apply_filter.py`
 Apply a named photo filter to the most recent photo from the latest session and display the before/after.
 
 | Arg | Description |
 | --- | --- |
-| `filter {none,bw,sepia,vintage,vintage2}` | (positional, required) Filter to apply |
+| `filter {none,bw,sepia,vintage,vintage2,final}` | (positional, required) Filter to apply |
 | `--output PATH`, `-o PATH` | Output path for the filtered image (default: `output/filtered_latest.jpg`) |
 | `--captures-dir PATH` | Directory containing capture sessions (default: `captures`) |
 | `--final-exposure FLOAT` | Exposure multiplier for the `final` filter; overrides config value |
@@ -45,6 +56,7 @@ Host-side test of the OLED film countdown animation (Pico must be connected and 
 | Arg | Description |
 | --- | --- |
 | `--seconds INT` | Number of seconds to count down (default: 5) |
+| `--no-click` | Disable the countdown click sound |
 
 ## `display_latest_photo.py`
 Shows the latest captured photo from the most recent session. No CLI args.

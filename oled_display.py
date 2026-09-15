@@ -61,11 +61,18 @@ class OledDisplay:
         status = f"Photo {photo_num} of {total}"
         self._send(f"COUNTDOWN:{seconds}:{status}")
 
-    def check_countdown_done(self) -> bool:
-        """Non-blocking check for a queued "COUNTDOWN_DONE" ack from the Pico.
+    def check_countdown_done(self, expected_seconds: int | None = None) -> bool:
+        """Non-blocking check for a queued "COUNTDOWN_DONE:<n>" ack from the Pico.
 
         Lets a caller pump other work (e.g. a camera preview loop) while
         waiting, instead of blocking like countdown_sync().
+
+        If *expected_seconds* is given, only an ack tagged with that exact
+        tick's value counts as done — stale acks left over from an earlier
+        tick (e.g. after a timeout fallback let the host get ahead of the
+        Pico) are silently discarded instead of being mistaken for the
+        current tick, which previously let the countdown drift and the
+        shutter fire before the on-screen animation actually finished.
         """
         if not self._connected:
             return False
@@ -75,8 +82,15 @@ class OledDisplay:
                 self._buf += self._serial.read(waiting).decode(errors="ignore")
             while "\n" in self._buf:
                 line, self._buf = self._buf.split("\n", 1)
-                if line.strip() == "COUNTDOWN_DONE":
+                line = line.strip()
+                if not line.startswith("COUNTDOWN_DONE"):
+                    continue
+                if expected_seconds is None:
                     return True
+                _, _, tag = line.partition(":")
+                if tag.isdigit() and int(tag) == expected_seconds:
+                    return True
+                # else: ack for a different (stale) tick — discard and keep scanning
         except Exception:
             pass
         return False
@@ -94,7 +108,7 @@ class OledDisplay:
             return
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if self.check_countdown_done():
+            if self.check_countdown_done(seconds):
                 return
             time.sleep(0.005)
 

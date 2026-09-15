@@ -173,11 +173,12 @@ def main() -> None:
         printer_error: str | None = None
         _last_hw_check = 0.0
         _oled_error_active = False
+        _camera_healthy = True  # updated by the periodic reconnect check below
         _CAMERA_GRACE = 5.0  # seconds before a camera failure is treated as an error
 
         while True:
             frame = None
-            camera_ok = True
+            camera_ok = _camera_healthy
             if args.preview:
                 try:
                     frame = camera.read_frame()
@@ -185,9 +186,12 @@ def main() -> None:
                 except RuntimeError:
                     if _camera_fail_since is None:
                         _camera_fail_since = time.time()
-                    camera_ok = (time.time() - _camera_fail_since) < _CAMERA_GRACE
+                    camera_ok = camera_ok and (time.time() - _camera_fail_since) < _CAMERA_GRACE
 
-            # Periodic hardware check every 3 s
+            # Periodic hardware check every 3 s. This is also what lets the
+            # booth recover from a dropped camera connection on its own: if
+            # the camera went away while idle, try to reconnect it here so it
+            # comes back to READY without restarting the app.
             now = time.time()
             if now - _last_hw_check > 3.0:
                 _last_hw_check = now
@@ -195,6 +199,13 @@ def main() -> None:
                     printer_error = check_printer_ready(config.PRINTER_NAME)
                 else:
                     printer_error = None
+                if camera.is_connected():
+                    _camera_healthy = True
+                else:
+                    print("[session] Camera appears disconnected — attempting to reconnect...")
+                    _camera_healthy = camera.ensure_connected()
+                    print("[session] Camera reconnected." if _camera_healthy
+                          else "[session] Camera reconnect failed; staying in CAMERA ERROR state.")
 
             hw_errors: list[str] = []
             if printer_error:
@@ -239,6 +250,14 @@ def main() -> None:
             import msvcrt
             console_start = not args.preview and msvcrt.kbhit() and msvcrt.getch() in (b"\r", b"\n")
             if key == ord(" ") or button_pressed or console_start:
+                if not camera.ensure_connected():
+                    print("[session] Cannot start session — camera is not connected.")
+                    _camera_healthy = False
+                    if oled is not None:
+                        oled.error("Camera not connected")
+                        _oled_error_active = True
+                    continue
+                _camera_healthy = True
                 try:
                     if oled is not None:
                         # Ignore any extra taps collected before this session starts.

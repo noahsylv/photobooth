@@ -41,3 +41,24 @@ class CameraController(ABC):
     @abstractmethod
     def disconnect(self) -> None:
         """Close the camera session and free all SDK / OS resources."""
+
+    def is_connected(self) -> bool:
+        """Return True if the camera connection appears healthy right now.
+
+        Default implementation assumes the connection never silently drops;
+        backends that can lose their connection in the background (e.g. a
+        tethered USB camera left idle for hours) should override this with a
+        real liveness probe.
+        """
+        return True
+
+    def ensure_connected(self) -> bool:
+        """Verify the camera is connected/responsive, reconnecting if needed.
+
+        Returns True once the camera is ready to use, False if a
+        reconnection attempt was needed and failed. The default
+        implementation just checks is_connected() since the base camera
+        never disconnects on its own; backends prone to dropping their
+        connection should override this to actually reconnect.
+        """
+        return self.is_connected()

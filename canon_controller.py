@@ -45,6 +45,7 @@ from camera_controller import CameraController
 EDS_ERR_OK = 0x00000000
 
 # Property IDs  (verified against EDSDKTypes.h from EDSDK v13.20.21)
+kEdsPropID_ProductName         = 0x00000002
 kEdsPropID_SaveTo              = 0x0000000b
 kEdsPropID_Evf_OutputDevice    = 0x00000500
 
@@ -73,6 +74,8 @@ EDS_MAX_NAME = 256
 EDS_ERR_DEVICE_BUSY = 0x00000081
 
 _CAPTURE_TIMEOUT_S = 30.0   # seconds to wait for the image-ready event
+_RECONNECT_ATTEMPTS = 3
+_RECONNECT_DELAY_S = 2.0
 
 
 # ── ctypes structs ────────────────────────────────────────────────────────────
@@ -198,6 +201,7 @@ class CanonController(CameraController):
 
     def connect(self) -> None:
         """Initialize EDSDK, detect the first connected Canon camera, open a session."""
+        print("[canon] Connecting to camera...")
         sdk = ctypes.WinDLL(str(self._dll_path))
         self._setup_prototypes(sdk)
 
@@ -271,6 +275,61 @@ class CanonController(CameraController):
 
         self._sdk = sdk
         self._camera_ref = camera_ref
+        print("[canon] Camera connected and session opened.")
+
+    def is_connected(self) -> bool:
+        """Cheap liveness probe: read a property from the open session.
+
+        Returns False (rather than raising) whenever the SDK isn't
+        initialized yet or the property read fails, which is what happens
+        once a tethered camera goes to sleep, loses USB power, or is
+        unplugged.
+        """
+        if self._sdk is None or self._camera_ref is None:
+            return False
+        buf = ctypes.create_string_buffer(32)
+        try:
+            err = self._sdk.EdsGetPropertyData(
+                self._camera_ref, kEdsPropID_ProductName, 0, ctypes.sizeof(buf), buf
+            )
+        except Exception:
+            return False
+        return err == EDS_ERR_OK
+
+    def ensure_connected(self) -> bool:
+        """Verify the camera is responsive, reconnecting from scratch if not."""
+        if self.is_connected():
+            return True
+        return self._reconnect()
+
+    def _reconnect(self) -> bool:
+        """Tear down the current session (if any) and re-establish one.
+
+        Restores live view if it was running before the disconnect, since
+        connect() only re-applies the SaveTo/Capacity/event-handler settings
+        it always applies on a fresh connection.
+        """
+        lv_was_running = self._lv_thread is not None and self._lv_thread.is_alive()
+        print("[canon] Camera connection lost — attempting to reconnect...")
+        try:
+            self.disconnect()
+        except Exception as exc:
+            print(f"[canon] Cleanup before reconnect raised (ignored): {exc}")
+
+        for attempt in range(1, _RECONNECT_ATTEMPTS + 1):
+            try:
+                self.connect()
+                print(f"[canon] Reconnect succeeded on attempt {attempt}/{_RECONNECT_ATTEMPTS}.")
+                if lv_was_running:
+                    self.start_live_view()
+                return True
+            except Exception as exc:
+                print(f"[canon] Reconnect attempt {attempt}/{_RECONNECT_ATTEMPTS} failed: {exc}")
+                if attempt < _RECONNECT_ATTEMPTS:
+                    time.sleep(_RECONNECT_DELAY_S)
+
+        print("[canon] All reconnect attempts failed; camera remains unavailable.")
+        return False
 
     def start_live_view(self) -> None:
         """Enable the camera's Electronic Viewfinder output to the PC."""
@@ -322,6 +381,34 @@ class CanonController(CameraController):
             return self._latest_frame.copy()
 
     def capture_photo(self, output_path: Path) -> Path:
+        """
+        Fire the shutter via EDSDK, wait for the image-ready event, download
+        the JPEG to *output_path*, and return *output_path*.
+
+        Verifies the camera is connected first (reconnecting if needed), and
+        if the actual capture attempt fails because the camera dropped its
+        connection, reconnects and retries the capture exactly once.
+        """
+        if not self.ensure_connected():
+            raise RuntimeError(
+                "Canon camera is not connected and could not be reconnected."
+            )
+        try:
+            return self._capture_photo_once(output_path)
+        except Exception as exc:
+            if self.is_connected():
+                # Camera is still there — a real capture error, not a dropped
+                # connection, so don't mask it by silently retrying.
+                raise
+            print(f"[canon] Capture failed, camera appears disconnected ({exc}); reconnecting...")
+            if not self._reconnect():
+                raise RuntimeError(
+                    f"Capture failed and camera could not be reconnected: {exc}"
+                ) from exc
+            print("[canon] Reconnected — retrying capture once.")
+            return self._capture_photo_once(output_path)
+
+    def _capture_photo_once(self, output_path: Path) -> Path:
         """
         Fire the shutter via EDSDK, wait for the image-ready event, download
         the JPEG to *output_path*, and return *output_path*.
@@ -429,6 +516,7 @@ class CanonController(CameraController):
             self._camera_ref = None
         self._sdk.EdsTerminateSDK()
         self._sdk = None
+        print("[canon] Camera session closed.")
 
     # ── private helpers ───────────────────────────────────────────────────────
 
@@ -573,6 +661,9 @@ class CanonController(CameraController):
 
         sdk.EdsSetPropertyData.restype  = u32
         sdk.EdsSetPropertyData.argtypes = [vp, u32, i32, u32, vp]
+
+        sdk.EdsGetPropertyData.restype  = u32
+        sdk.EdsGetPropertyData.argtypes = [vp, u32, i32, u32, vp]
 
         sdk.EdsSetObjectEventHandler.restype  = u32
         sdk.EdsSetObjectEventHandler.argtypes = [vp, u32, vp, vp]

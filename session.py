@@ -48,7 +48,8 @@ class PhotoSession:
         return captured
 
     def _run_countdown(self, index: int) -> None:
-        for remaining in range(self.config.COUNTDOWN_SECONDS, 0, -1):
+        seconds = self.config.FIRST_COUNTDOWN_SECONDS if index == 0 else self.config.COUNTDOWN_SECONDS
+        for remaining in range(seconds, 0, -1):
             status = f"Photo {index + 1} of {self.config.PHOTO_COUNT}"
             if self.preview_callback is not None:
                 self.preview_callback(status, remaining)

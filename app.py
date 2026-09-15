@@ -76,7 +76,8 @@ def run_dry_session(config: AppConfig, oled: OledDisplay | None, click: ClickSou
     """Simulate a full session with sleeps only — no camera, no printer."""
     print("[dry-run] Starting session...")
     for i in range(config.PHOTO_COUNT):
-        for remaining in range(config.COUNTDOWN_SECONDS, 0, -1):
+        seconds = config.FIRST_COUNTDOWN_SECONDS if i == 0 else config.COUNTDOWN_SECONDS
+        for remaining in range(seconds, 0, -1):
             print(f"[dry-run] Photo {i + 1}/{config.PHOTO_COUNT} — {remaining}s")
             if oled is not None:
                 oled.countdown_sync(i + 1, config.PHOTO_COUNT, remaining)

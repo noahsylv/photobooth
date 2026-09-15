@@ -43,6 +43,14 @@ class AppConfig:
     # PHOTO_FILTER_FINAL_EXPOSURE: float = 1.40  # exposure factor used by the 'final' filter
     PHOTO_FILTER_FINAL_EXPOSURE: float = .95  # 1.15? exposure factor used by the 'final' filter
 
+    # Where each photo is cropped from when fitting it into its strip slot.
+    # 0.5 = centered (default/original behavior). 0.0 = keep the top/left of
+    # the frame (crop from the bottom/right); 1.0 = keep the bottom/right.
+    # (The scaling needed to keep the aspect ratio undistorted is computed
+    # automatically — this is the only value you need to tune.)
+    PHOTO_CROP_CENTER_X: float = 0.5
+    PHOTO_CROP_CENTER_Y: float = 0.5
+
     CAPTURES_DIR: Path = Path("captures")
     OUTPUT_DIR: Path = Path("output")
 

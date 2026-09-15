@@ -76,6 +76,7 @@ def _build_single_strip(photo_paths: list[str], config: AppConfig, side: str = "
             inner_h,
             config.PHOTO_FILTER,
             config.PHOTO_FILTER_FINAL_EXPOSURE,
+            (config.PHOTO_CROP_CENTER_X, config.PHOTO_CROP_CENTER_Y),
         )
         strip.paste(slot, (slot_left + photo_border, slot_top + photo_border))
 
@@ -150,12 +151,70 @@ def _apply_filter(img: Image.Image, filter_name: str, final_exposure: float = 1.
     return img  # "none" or unknown
 
 
-def _fit_photo_to_slot(photo_path: str, slot_width: int, slot_height: int, photo_filter: str = "none", final_exposure: float = 1.0) -> Image.Image:
+def _fit_photo_to_slot(
+    photo_path: str,
+    slot_width: int,
+    slot_height: int,
+    photo_filter: str = "none",
+    final_exposure: float = 1.0,
+    crop_center: tuple[float, float] = (0.5, 0.5),
+) -> Image.Image:
     with Image.open(photo_path) as src:
         src = ImageOps.exif_transpose(src)
         src_rgb = src.convert("RGB")
-        fitted = ImageOps.fit(src_rgb, (slot_width, slot_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        fitted = _cover_crop(src_rgb, slot_width, slot_height, crop_center)
         return _apply_filter(fitted, photo_filter, final_exposure)
+
+
+# Zoom-in factor (fraction of the max-cover crop) used at the extremes of
+# PHOTO_CROP_CENTER_Y/X (0 or 1). Purely internal: it exists only to give
+# the centering room to shift the frame up/down. The actual zoom applied is
+# scaled by how far the center is from 0.5, so center=0.5 always yields the
+# original, undistorted, un-zoomed crop (matching pre-recentering behavior)
+# and moving away from 0.5 progressively zooms in just enough to allow it.
+_MIN_CROP_ZOOM = 0.65
+
+
+def _cover_crop(
+    img: Image.Image,
+    target_w: int,
+    target_h: int,
+    center: tuple[float, float] = (0.5, 0.5),
+) -> Image.Image:
+    """Crop *img* to a target_w/target_h box and resize to that exact size.
+
+    Unlike ImageOps.fit, the crop box is shrunk on both axes (not just the
+    one axis that naturally overflows) whenever *center* moves away from
+    (0.5, 0.5), so there is slack on both axes for *center* to shift the crop
+    around in — otherwise the axis matching the source's aspect ratio has
+    zero slack and its centering value is a no-op. At exactly (0.5, 0.5) no
+    extra zoom is applied, reproducing the original undistorted crop. The
+    output aspect ratio always matches target_w/target_h, so the image is
+    never stretched.
+    """
+    src_w, src_h = img.size
+    target_ratio = target_w / target_h
+    src_ratio = src_w / src_h
+    if src_ratio > target_ratio:
+        crop_h = src_h
+        crop_w = crop_h * target_ratio
+    else:
+        crop_w = src_w
+        crop_h = crop_w / target_ratio
+
+    cx = min(1.0, max(0.0, center[0]))
+    cy = min(1.0, max(0.0, center[1]))
+    # How far the requested center is from dead-center, 0 (centered) .. 1 (extreme).
+    offset = max(abs(cx - 0.5), abs(cy - 0.5)) * 2
+    zoom = 1.0 - offset * (1.0 - _MIN_CROP_ZOOM)
+    crop_w *= zoom
+    crop_h *= zoom
+
+    x = (src_w - crop_w) * cx
+    y = (src_h - crop_h) * cy
+    box = (x, y, x + crop_w, y + crop_h)
+    return img.resize((target_w, target_h), resample=Image.Resampling.LANCZOS, box=box)
+
 
 
 def _draw_footer(

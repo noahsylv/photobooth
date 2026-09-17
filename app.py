@@ -80,7 +80,12 @@ def run_dry_session(config: AppConfig, oled: OledDisplay | None, click: ClickSou
         for remaining in range(seconds, 0, -1):
             print(f"[dry-run] Photo {i + 1}/{config.PHOTO_COUNT} — {remaining}s")
             if oled is not None:
-                oled.countdown_sync(i + 1, config.PHOTO_COUNT, remaining)
+                oled.countdown_sync(
+                    i + 1,
+                    config.PHOTO_COUNT,
+                    remaining,
+                    show_photo_progress=config.OLED_SHOW_PHOTO_PROGRESS,
+                )
             else:
                 time.sleep(1)
             if click is not None:

@@ -57,8 +57,14 @@ class OledDisplay:
     def idle(self) -> None:
         self._send("IDLE")
 
-    def countdown(self, photo_num: int, total: int, seconds: int) -> None:
-        status = f"Photo {photo_num} of {total}"
+    def countdown(
+        self,
+        photo_num: int,
+        total: int,
+        seconds: int,
+        show_photo_progress: bool = True,
+    ) -> None:
+        status = f"{photo_num} / {total}" if show_photo_progress else ""
         self._send(f"COUNTDOWN:{seconds}:{status}")
 
     def check_countdown_done(self, expected_seconds: int | None = None) -> bool:
@@ -95,7 +101,14 @@ class OledDisplay:
             pass
         return False
 
-    def countdown_sync(self, photo_num: int, total: int, seconds: int, timeout: float = 2.0) -> None:
+    def countdown_sync(
+        self,
+        photo_num: int,
+        total: int,
+        seconds: int,
+        timeout: float = 2.0,
+        show_photo_progress: bool = True,
+    ) -> None:
         """Like countdown(), but blocks until the Pico reports it finished drawing.
 
         The Pico's per-second animation can occasionally run long; waiting for
@@ -103,7 +116,7 @@ class OledDisplay:
         keeps a click/tick sound in sync with what's actually on screen.
         Falls back to returning after `timeout` if no ack arrives (e.g. not connected).
         """
-        self.countdown(photo_num, total, seconds)
+        self.countdown(photo_num, total, seconds, show_photo_progress)
         if not self._connected:
             return
         deadline = time.monotonic() + timeout

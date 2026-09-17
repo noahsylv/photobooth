@@ -170,6 +170,11 @@ def parse_args() -> argparse.Namespace:
         help="Exposure multiplier for the final filter.",
     )
     parser.add_argument(
+        "--no-crop",
+        action="store_true",
+        help="Keep the full photo frame; fit it inside each slot with padding.",
+    )
+    parser.add_argument(
         "--show",
         action="store_true",
         help="Open a preview window of the rebuilt strip before printing.",
@@ -228,6 +233,10 @@ def main() -> int:
         config,
         PHOTO_FILTER=filter_name,
         PHOTO_FILTER_FINAL_EXPOSURE=exposure,
+        PHOTO_CROP_CENTER_X=0.5 if args.no_crop else config.PHOTO_CROP_CENTER_X,
+        PHOTO_CROP_CENTER_Y=0.5 if args.no_crop else config.PHOTO_CROP_CENTER_Y,
+        PHOTO_CROP_TOP_TRIM=0.0 if args.no_crop else config.PHOTO_CROP_TOP_TRIM,
+        PHOTO_CROP_BOTTOM_TRIM=0.0 if args.no_crop else config.PHOTO_CROP_BOTTOM_TRIM,
     )
 
     output_path = args.output or config.OUTPUT_DIR / (

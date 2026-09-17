@@ -249,6 +249,9 @@ def show_countdown(oled, n: int, status: str):
         for i, ch in enumerate(s):
             _draw_big_char(oled, ch, tx + i * char_w, ty, scale=scale)
 
+        if status:
+            oled.text(status[:7], 0, 0, 1)
+
         # Film grain disabled by request.
         # for _ in range(4):
         #     oled.pixel(random.randint(0, 127), random.randint(0, 63), 1)

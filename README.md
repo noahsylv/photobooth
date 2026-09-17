@@ -25,6 +25,7 @@ Rebuild (and optionally print) a strip from an existing capture session or an ar
 | `--captures-dir PATH` | Directory containing sessions; defaults to `config.py` |
 | `--output PATH`, `-o PATH` | Output strip path; defaults to `output/reprint_<timestamp>.jpg` |
 | `--final-exposure FLOAT` | Exposure multiplier for the `final` filter |
+| `--no-crop` | Keep each photo's full frame, fitting it inside the slot with padding |
 | `--show` | Open a preview window of the rebuilt strip before printing |
 | `--print` | Send the rebuilt strip to the configured printer |
 | `--no-print` | Only rebuild the strip; do not print it (default) |

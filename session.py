@@ -54,7 +54,12 @@ class PhotoSession:
             if self.preview_callback is not None:
                 self.preview_callback(status, remaining)
             if self.oled is not None:
-                self.oled.countdown(index + 1, self.config.PHOTO_COUNT, remaining)
+                self.oled.countdown(
+                    index + 1,
+                    self.config.PHOTO_COUNT,
+                    remaining,
+                    self.config.OLED_SHOW_PHOTO_PROGRESS,
+                )
             self._wait_one_second(status, remaining)
             if self.click is not None:
                 self.click.play()

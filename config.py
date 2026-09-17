@@ -15,6 +15,7 @@ class AppConfig:
     FIRST_COUNTDOWN_SECONDS: int = 5  # longer countdown before the first photo
     DELAY_BETWEEN_PHOTOS: float = 1.5
     CAPTURE_SETTLE_SECONDS: float = 0.65
+    OLED_SHOW_PHOTO_PROGRESS: bool = True
 
     # Pre-rotation dimensions: 1240×1844 rotated 90° → 1844×1240 matches the
     # printer DC exactly so the image fills the page with no letterboxing.
@@ -41,8 +42,7 @@ class AppConfig:
     STRIP_BACKGROUND_COLOR: str = "black"  # background colour for the strip canvas
     PHOTO_FILTER: str = "final"  # photo filter applied to each image: "none", "bw", "sepia", "vintage", "vintage2", "final"
     # PHOTO_FILTER_FINAL_EXPOSURE: float = 1.40  # exposure factor used by the 'final' filter
-    PHOTO_FILTER_FINAL_EXPOSURE: float = .95  # 1.15? exposure factor used by the 'final' filter
-
+    PHOTO_FILTER_FINAL_EXPOSURE: float = .85  # 1.15? exposure factor used by the 'final' filter
     # Where each photo is cropped from when fitting it into its strip slot.
     # 0.5 = centered (default/original behavior). 0.0 = keep the top/left of
     # the frame (crop from the bottom/right); 1.0 = keep the bottom/right.
@@ -55,7 +55,7 @@ class AppConfig:
     # the photo's height (0.0-1.0). Use these to remove unwanted headroom or
     # chin/floor space independently of PHOTO_CROP_CENTER_Y — e.g.
     # PHOTO_CROP_TOP_TRIM=0.1 deletes the top 10% of every photo outright.
-    PHOTO_CROP_TOP_TRIM: float = 0.1
+    PHOTO_CROP_TOP_TRIM: float = 0.03 # was .1
     PHOTO_CROP_BOTTOM_TRIM: float = 0.1
 
     CAPTURES_DIR: Path = Path("captures")

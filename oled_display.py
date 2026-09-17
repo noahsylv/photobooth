@@ -64,7 +64,7 @@ class OledDisplay:
         seconds: int,
         show_photo_progress: bool = True,
     ) -> None:
-        status = f"{photo_num} / {total}" if show_photo_progress else ""
+        status = f"{photo_num}/{total}" if show_photo_progress else ""
         self._send(f"COUNTDOWN:{seconds}:{status}")
 
     def check_countdown_done(self, expected_seconds: int | None = None) -> bool:

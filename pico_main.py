@@ -150,6 +150,22 @@ def _draw_text_scaled(oled, text: str, x: int, y: int, scale: int = 1, col: int 
         _draw_big_char(oled, ch, x + i * 8 * scale, y, scale=scale)
 
 
+def _draw_text_fractional_height(oled, text: str, x: int, y: int, height_scale: float = 1.25):
+    """Draw compact text slightly taller without increasing its horizontal footprint."""
+    for char_index, char in enumerate(text):
+        buf = bytearray(8)
+        fb = framebuf.FrameBuffer(buf, 8, 8, framebuf.MONO_VLSB)
+        fb.fill(0)
+        fb.text(char, 0, 0, 1)
+        char_x = x + char_index * 8
+        for cy in range(8):
+            y0 = int(y + cy * height_scale)
+            y1 = max(y0 + 1, int(y + (cy + 1) * height_scale))
+            for cx in range(8):
+                if (buf[cx] >> cy) & 1:
+                    oled.fill_rect(char_x + cx, y0, 1, y1 - y0, 1)
+
+
 def _draw_text_centered(oled, text: str, y: int, col: int = 1, max_chars: int = 16, scale: int = 1):
     """Draw text centered on the 128px-wide OLED, shrinking scale if it wouldn't fit."""
     clipped = text[:max_chars]
@@ -250,7 +266,7 @@ def show_countdown(oled, n: int, status: str):
             _draw_big_char(oled, ch, tx + i * char_w, ty, scale=scale)
 
         if status:
-            oled.text(status[:7], 0, 0, 1)
+            _draw_text_fractional_height(oled, status[:7], 0, 0, height_scale=2.0)
 
         # Film grain disabled by request.
         # for _ in range(4):

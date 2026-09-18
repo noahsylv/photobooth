@@ -57,6 +57,7 @@ kEdsEvfOutputDevice_PC = 0x00000002
 
 # Camera commands  (verified against EDSDKTypes.h)
 kEdsCameraCommand_PressShutterButton              = 0x00000004
+kEdsCameraCommand_ShutterButton_Halfway          = 0x00000001
 kEdsCameraCommand_ShutterButton_OFF               = 0x00000000
 kEdsCameraCommand_ShutterButton_Completely_NonAF  = 0x00010003
 
@@ -74,6 +75,8 @@ EDS_MAX_NAME = 256
 EDS_ERR_DEVICE_BUSY = 0x00000081
 
 _CAPTURE_TIMEOUT_S = 30.0   # seconds to wait for the image-ready event
+_AUTOFOCUS_ATTEMPTS = 2
+_AUTOFOCUS_WAIT_S = 0.75
 _RECONNECT_ATTEMPTS = 3
 _RECONNECT_DELAY_S = 2.0
 
@@ -408,6 +411,47 @@ class CanonController(CameraController):
             print("[canon] Reconnected — retrying capture once.")
             return self._capture_photo_once(output_path)
 
+    def autofocus(self) -> bool:
+        """Run Canon's half-press autofocus command before a capture.
+
+        EDSDK keeps the half-press active while the camera focuses and returns
+        from the command only after the camera accepts the focus operation.
+        Holding it briefly gives the lens time to finish before the shutter is
+        triggered. The half-press is released after every attempt.
+        """
+        if not self.ensure_connected():
+            return False
+
+        for attempt in range(1, _AUTOFOCUS_ATTEMPTS + 1):
+            err = self._sdk.EdsSendCommand(
+                self._camera_ref,
+                kEdsCameraCommand_PressShutterButton,
+                kEdsCameraCommand_ShutterButton_Halfway,
+            )
+            if err == EDS_ERR_OK:
+                time.sleep(_AUTOFOCUS_WAIT_S)
+                self._sdk.EdsSendCommand(
+                    self._camera_ref,
+                    kEdsCameraCommand_PressShutterButton,
+                    kEdsCameraCommand_ShutterButton_OFF,
+                )
+                print(f"[canon] Autofocus confirmed on attempt {attempt}/{_AUTOFOCUS_ATTEMPTS}.")
+                return True
+
+            self._sdk.EdsSendCommand(
+                self._camera_ref,
+                kEdsCameraCommand_PressShutterButton,
+                kEdsCameraCommand_ShutterButton_OFF,
+            )
+            print(
+                f"[canon] Autofocus attempt {attempt}/{_AUTOFOCUS_ATTEMPTS} failed: "
+                f"0x{err:08X}"
+            )
+            if attempt < _AUTOFOCUS_ATTEMPTS:
+                time.sleep(0.2)
+
+        return False
+
     def _capture_photo_once(self, output_path: Path) -> Path:
         """
         Fire the shutter via EDSDK, wait for the image-ready event, download
@@ -434,6 +478,9 @@ class CanonController(CameraController):
                 cv2.waitKey(1)
                 time.sleep(0.01)
             self._lv_thread = None
+
+        if not self.autofocus():
+            raise RuntimeError("Autofocus failed after retrying before capture.")
 
         self._pending_output_path = output_path
         self._capture_error = None

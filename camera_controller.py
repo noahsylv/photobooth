@@ -38,6 +38,10 @@ class CameraController(ABC):
         and return the path of the saved file.
         """
 
+    def autofocus(self) -> bool:
+        """Initiate autofocus and return whether focus was confirmed."""
+        return True
+
     @abstractmethod
     def disconnect(self) -> None:
         """Close the camera session and free all SDK / OS resources."""

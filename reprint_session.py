@@ -175,6 +175,11 @@ def parse_args() -> argparse.Namespace:
         help="Keep the full photo frame; fit it inside each slot with padding.",
     )
     parser.add_argument(
+        "--single-strip",
+        action="store_true",
+        help="Render only the left strip; leave the other half of the print blank.",
+    )
+    parser.add_argument(
         "--show",
         action="store_true",
         help="Open a preview window of the rebuilt strip before printing.",
@@ -242,7 +247,12 @@ def main() -> int:
     output_path = args.output or config.OUTPUT_DIR / (
         f"reprint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     )
-    strip_path = create_strip(photo_paths, str(output_path), reprint_config)
+    strip_path = create_strip(
+        photo_paths,
+        str(output_path),
+        reprint_config,
+        single_strip=args.single_strip,
+    )
     print(f"Source: {source_dir}")
     print(f"Filter: {filter_name}")
     print(f"Strip saved to: {strip_path}")

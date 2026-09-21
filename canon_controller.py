@@ -412,7 +412,7 @@ class CanonController(CameraController):
             return self._capture_photo_once(output_path)
 
     def autofocus(self) -> bool:
-        """Run Canon's half-press autofocus command before a capture.
+        """Best-effort Canon half-press autofocus before a capture.
 
         EDSDK keeps the half-press active while the camera focuses and returns
         from the command only after the camera accepts the focus operation.
@@ -423,30 +423,37 @@ class CanonController(CameraController):
             return False
 
         for attempt in range(1, _AUTOFOCUS_ATTEMPTS + 1):
-            err = self._sdk.EdsSendCommand(
-                self._camera_ref,
-                kEdsCameraCommand_PressShutterButton,
-                kEdsCameraCommand_ShutterButton_Halfway,
-            )
-            if err == EDS_ERR_OK:
-                time.sleep(_AUTOFOCUS_WAIT_S)
-                self._sdk.EdsSendCommand(
+            err: int | None = None
+            confirmed = False
+            try:
+                err = self._sdk.EdsSendCommand(
                     self._camera_ref,
                     kEdsCameraCommand_PressShutterButton,
-                    kEdsCameraCommand_ShutterButton_OFF,
+                    kEdsCameraCommand_ShutterButton_Halfway,
                 )
+                if err == EDS_ERR_OK:
+                    time.sleep(_AUTOFOCUS_WAIT_S)
+                    confirmed = True
+            except Exception as exc:
+                print(f"[canon] Autofocus attempt {attempt}/{_AUTOFOCUS_ATTEMPTS} raised: {exc}")
+            finally:
+                try:
+                    self._sdk.EdsSendCommand(
+                        self._camera_ref,
+                        kEdsCameraCommand_PressShutterButton,
+                        kEdsCameraCommand_ShutterButton_OFF,
+                    )
+                except Exception as exc:
+                    print(f"[canon] Autofocus release failed (ignored): {exc}")
+
+            if confirmed:
                 print(f"[canon] Autofocus confirmed on attempt {attempt}/{_AUTOFOCUS_ATTEMPTS}.")
                 return True
-
-            self._sdk.EdsSendCommand(
-                self._camera_ref,
-                kEdsCameraCommand_PressShutterButton,
-                kEdsCameraCommand_ShutterButton_OFF,
-            )
-            print(
-                f"[canon] Autofocus attempt {attempt}/{_AUTOFOCUS_ATTEMPTS} failed: "
-                f"0x{err:08X}"
-            )
+            if err is not None:
+                print(
+                    f"[canon] Autofocus attempt {attempt}/{_AUTOFOCUS_ATTEMPTS} failed: "
+                    f"0x{err:08X}"
+                )
             if attempt < _AUTOFOCUS_ATTEMPTS:
                 time.sleep(0.2)
 
@@ -480,7 +487,7 @@ class CanonController(CameraController):
             self._lv_thread = None
 
         if not self.autofocus():
-            raise RuntimeError("Autofocus failed after retrying before capture.")
+            print("[canon] Autofocus unavailable; continuing with best-effort capture.")
 
         self._pending_output_path = output_path
         self._capture_error = None

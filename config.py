@@ -42,7 +42,7 @@ class AppConfig:
     STRIP_BACKGROUND_COLOR: str = "black"  # background colour for the strip canvas
     PHOTO_FILTER: str = "final"  # photo filter applied to each image: "none", "bw", "sepia", "vintage", "vintage2", "final"
     # PHOTO_FILTER_FINAL_EXPOSURE: float = 1.40  # exposure factor used by the 'final' filter
-    PHOTO_FILTER_FINAL_EXPOSURE: float = .85  # 1.15? exposure factor used by the 'final' filter
+    PHOTO_FILTER_FINAL_EXPOSURE: float = .85  # was .85 # 1.15? exposure factor used by the 'final' filter
     # Where each photo is cropped from when fitting it into its strip slot.
     # 0.5 = centered (default/original behavior). 0.0 = keep the top/left of
     # the frame (crop from the bottom/right); 1.0 = keep the bottom/right.

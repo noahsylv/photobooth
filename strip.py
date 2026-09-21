@@ -14,18 +14,20 @@ def create_strip(
     photo_paths: list[str],
     output_path: str,
     config: AppConfig,
+    single_strip: bool = False,
 ) -> str:
     if len(photo_paths) != config.PHOTO_COUNT:
         raise ValueError(f"Expected {config.PHOTO_COUNT} photos, got {len(photo_paths)}.")
 
-    left_strip  = _build_single_strip(photo_paths, config, "L")
-    right_strip = _build_single_strip(photo_paths, config, "R")
+    left_strip = _build_single_strip(photo_paths, config, "L")
 
     final_img = Image.new("RGB", (config.PRINT_WIDTH, config.PRINT_HEIGHT), config.STRIP_BACKGROUND_COLOR)
     final_img.paste(left_strip, (0, 0))
-    # Place the second strip flush against the right edge so the gap between
-    # the two strips lands exactly on the 2-inch cut line.
-    final_img.paste(right_strip, (config.PRINT_WIDTH - config.STRIP_WIDTH, 0))
+    if not single_strip:
+        right_strip = _build_single_strip(photo_paths, config, "R")
+        # Place the second strip flush against the right edge so the gap between
+        # the two strips lands exactly on the 2-inch cut line.
+        final_img.paste(right_strip, (config.PRINT_WIDTH - config.STRIP_WIDTH, 0))
 
     out_path = Path(output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,1 +1,9 @@
-py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p1 --no-crop; py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p2 --no-crop; py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p3 --no-crop;py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p4 --no-crop;
+py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p1 --no-crop ;  py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p2 --no-crop ;  py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p3 --no-crop ; py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p4 --no-crop ; 
+
+
+py .\reprint_session.py --print --photos-dir .\other_photos\phtobooth\p1 --no-crop ;  py .\reprint_session.py --print --photos-dir .\other_photos\phtobooth\p2 --no-crop ;  py .\reprint_session.py --print --photos-dir .\other_photos\phtobooth\p3 --no-crop ; py .\reprint_session.py --print --photos-dir .\other_photos\phtobooth\p4 --no-crop ; 
+
+
+
+py .\reprint_session.py --show --photos-dir .\other_photos\phtobooth\p4 --no-crop ; 
+py .\reprint_session.py --print --photos-dir .\other_photos\phtobooth\p4 --no-crop ; 

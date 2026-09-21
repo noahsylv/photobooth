@@ -20,10 +20,10 @@ output/
 
 # Other
 other_photos/
-audio/
+audio/*
+!audio/timer.mp3
 random assets/
 photo_filter_inspo/
-later_setup.txt
 EDSDK.dll
 test_capture.jpg
 

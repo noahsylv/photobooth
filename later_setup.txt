@@ -1,0 +1,16 @@
+Photobooth Automatic Startup & Remote Access
+
+Automatic startup
+
+Create a .bat file that launches the photobooth Python app using its virtual environment.
+Put a shortcut to the .bat file in the Windows Startup folder (Win + R → shell:startup).
+Configure Windows to automatically log into the dedicated booth account. - DONE
+Final behavior: power on → Windows auto-login → photobooth app launches → OLED shows READY.
+
+Remote troubleshooting - DONE, no dummy HDMI plug needed
+
+Install Chrome Remote Desktop on the Beelink.
+Connect to the Beelink from a laptop when troubleshooting is needed.
+This allows restarting the app, viewing logs, changing settings/code, and checking devices without connecting a monitor.
+Keep an inexpensive HDMI dummy plug connected to the Beelink so Windows behaves as though a monitor is attached.
+If venue Wi-Fi isn't available, connect the Beelink and laptop through a phone hotspot.
